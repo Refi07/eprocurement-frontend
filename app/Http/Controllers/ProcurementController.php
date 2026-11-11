@@ -27,7 +27,6 @@ class ProcurementController extends Controller
 
     public function storePr(Request $r)
     {
-        // 1. Bersihkan pemisah ribuan (titik/koma) dari input nominal sebelum validasi
         if ($r->has('estimated_total')) {
             $cleanTotal = str_replace(['.', ','], '', $r->input('estimated_total'));
             $r->merge(['estimated_total' => $cleanTotal]);
@@ -45,17 +44,18 @@ class ProcurementController extends Controller
         $d['user_id'] = $r->user()->id;
         $d['department'] = $r->input('department') ?? $r->user()->department ?? 'General / IT';
         $d['approval_level'] = $d['estimated_total'] > 50000000 ? 2 : 1;
-        $d['status'] = 'approved'; // Set otomatis approved untuk kemudahan testing RFQ
+        $d['status'] = 'pending_l1';
 
         PurchaseRequisition::create($d);
 
-        return redirect()->route('pr.create')->with('success', 'Draft PR berhasil disimpan.');
+        return redirect()->route('pr.create')->with('success', 'Draft PR berhasil diajukan dan menunggu persetujuan.');
     }
 
     public function approvals(Request $r)
     {
-        $level = $r->route('level');
-        $status = $level == 1 ? 'pending_l1' : 'pending_l2';
+        $level = (int) $r->route('level');
+        $status = $level === 1 ? 'pending_l1' : 'pending_l2';
+
         return view('pr.approval', [
             'prs' => PurchaseRequisition::with('user')->where('status', $status)->latest()->get(),
             'level' => $level
@@ -74,7 +74,7 @@ class ProcurementController extends Controller
             return back()->with('success', 'PR ditolak dan perlu direvisi.');
         }
 
-        if ($pr->status === 'pending_l1' && $pr->approval_level === 2) {
+        if ($pr->status === 'pending_l1' && (int) $pr->approval_level === 2) {
             $pr->update(['status' => 'pending_l2']);
         } else {
             $pr->update(['status' => 'approved']);
@@ -86,7 +86,7 @@ class ProcurementController extends Controller
     public function createRfq()
     {
         return view('rfq.create', [
-            'prs' => PurchaseRequisition::where('status', 'approved')->doesntHave('rfq')->get()
+            'prs' => PurchaseRequisition::where('status', 'approved')->doesntHave('rfq')->latest()->get()
         ]);
     }
 
@@ -108,13 +108,12 @@ class ProcurementController extends Controller
         return back()->with('success', 'RFQ berhasil dipublikasikan.');
     }
 
-    // --- FITUR AI AGENT VENDOR RECOMMENDATION ---
     public function recommendVendors(Request $r, PurchaseRequisition $pr)
     {
         $keywords = explode(' ', strtolower($pr->description));
 
         $vendors = User::where('role', 'vendor')
-            ->where(function($query) use ($keywords) {
+            ->where(function ($query) use ($keywords) {
                 foreach ($keywords as $word) {
                     if (strlen($word) > 2) {
                         $query->orWhere('name', 'LIKE', "%{$word}%")
@@ -165,7 +164,6 @@ class ProcurementController extends Controller
 
     public function storeQuotation(Request $r)
     {
-        // Bersihkan titik/koma dari penawaran harga vendor jika ada
         if ($r->has('price')) {
             $cleanPrice = str_replace(['.', ','], '', $r->input('price'));
             $r->merge(['price' => $cleanPrice]);

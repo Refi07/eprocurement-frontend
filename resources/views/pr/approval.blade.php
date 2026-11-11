@@ -9,13 +9,35 @@
     </div>
 
     <div class="section-body">
+        @if(session('success'))
+            <div class="alert alert-success alert-dismissible show fade">
+                <div class="alert-body">
+                    <button class="close" data-dismiss="alert"><span>&times;</span></button>
+                    {{ session('success') }}
+                </div>
+            </div>
+        @endif
+
+        @if($errors->any())
+            <div class="alert alert-danger alert-dismissible show fade">
+                <div class="alert-body">
+                    <button class="close" data-dismiss="alert"><span>&times;</span></button>
+                    <ul class="mb-0 pl-3">
+                        @foreach($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            </div>
+        @endif
+
         <div class="card">
             <div class="card-header">
-                <h4>Daftar PR Menunggu Persetujuan</h4>
+                <h4>Daftar PR Menunggu Persetujuan Level {{ $level }}</h4>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-striped table-bordered">
+                    <table class="table table-bordered table-md">
                         <thead>
                             <tr>
                                 <th>No. PR</th>
@@ -24,40 +46,55 @@
                                 <th>Total Nominal</th>
                                 <th>Tingkat Approval</th>
                                 <th>Status</th>
-                                <th class="text-center" style="width: 180px;">Aksi</th>
+                                <th style="min-width: 260px;">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- Contoh PR <= 50JT (Cukup Supervisor / Level 1) -->
-                            <tr>
-                                <td>PR-2026-001</td>
-                                <td>User IT / IT Dept</td>
-                                <td>Pengadaan Printer Kantor</td>
-                                <td>Rp 12.500.000</td>
-                                <td><span class="badge badge-info">Level 1 (<=50JT)</span></td>
-                                <td><span class="badge badge-warning">Pending Approval L1</span></td>
-                                <td class="text-center text-nowrap">
-                                    <div class="d-flex justify-content-center align-items-center" style="gap: 5px;">
-                                        <button class="btn btn-sm btn-success" onclick="alert('PR Disetujui!')"><i class="fas fa-check"></i> Setujui</button>
-                                        <button class="btn btn-sm btn-danger" onclick="alert('PR Ditolak!')"><i class="fas fa-times"></i> Tolak</button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <!-- Contoh PR > 50JT (Wajib Supervisor + Management / Level 2) -->
-                            <tr>
-                                <td>PR-2026-002</td>
-                                <td>User Ops / Operasional</td>
-                                <td>Pengadaan Server RACK 2U</td>
-                                <td>Rp 85.000.000</td>
-                                <td><span class="badge badge-primary">Level 2 (>50JT)</span></td>
-                                <td><span class="badge badge-warning">Pending Approval L2</span></td>
-                                <td class="text-center text-nowrap">
-                                    <div class="d-flex justify-content-center align-items-center" style="gap: 5px;">
-                                        <button class="btn btn-sm btn-success" onclick="alert('PR Disetujui!')"><i class="fas fa-check"></i> Setujui</button>
-                                        <button class="btn btn-sm btn-danger" onclick="alert('PR Ditolak!')"><i class="fas fa-times"></i> Tolak</button>
-                                    </div>
-                                </td>
-                            </tr>
+                            @forelse($prs as $pr)
+                                <tr>
+                                    <td><strong>{{ $pr->number }}</strong></td>
+                                    <td>
+                                        {{ $pr->user->name ?? '-' }}
+                                        <br><small class="text-muted">{{ $pr->department ?? '-' }}</small>
+                                    </td>
+                                    <td>
+                                        {{ $pr->description }}
+                                        <br><small class="text-muted">{{ $pr->quantity }} {{ $pr->unit }}</small>
+                                    </td>
+                                    <td>Rp {{ number_format($pr->estimated_total, 0, ',', '.') }}</td>
+                                    <td>
+                                        @if($pr->approval_level == 2)
+                                            <span class="badge badge-info">Level 2 (&gt;50JT)</span>
+                                        @else
+                                            <span class="badge badge-primary">Level 1 (&lt;=50JT)</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-warning">
+                                            Pending Approval {{ $pr->status === 'pending_l2' ? 'L2' : 'L1' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <form action="{{ route('pr.decision', $pr->id) }}" method="POST">
+                                            @csrf
+                                            <input type="text" name="reason" class="form-control form-control-sm mb-2"
+                                                   placeholder="Alasan (isi jika ditolak)">
+                                            <button type="submit" name="decision" value="approve" class="btn btn-success btn-sm"
+                                                    onclick="return confirm('Setujui PR {{ $pr->number }}?')">
+                                                <i class="fas fa-check"></i> Setujui
+                                            </button>
+                                            <button type="submit" name="decision" value="reject" class="btn btn-danger btn-sm"
+                                                    onclick="return confirm('Tolak PR {{ $pr->number }}?')">
+                                                <i class="fas fa-times"></i> Tolak
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">Tidak ada PR yang menunggu persetujuan level ini.</td>
+                                </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>
